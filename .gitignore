@@ -1,0 +1,13 @@
+.venv/
+.build/
+.swiftpm/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+*.egg-info/
+build/
+dist/
+*.log
+*.spec
+assets/CoursePilot.iconset/
