@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>视频播放辅助测试页</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #151821; }
+    main { width: min(760px, 88vw); color: white; }
+    .video { position: relative; height: 420px; display: grid; place-items: center; border-radius: 18px; background: linear-gradient(135deg, #29334a, #10131b); box-shadow: 0 24px 80px #0008; }
+    .playing { font-size: 24px; text-align: center; }
+    .playing small { display: block; margin-top: 10px; color: #b9c0d4; font-size: 15px; }
+    dialog { width: min(380px, 76vw); padding: 28px; border: 0; border-radius: 16px; background: #fff; color: #111; box-shadow: 0 24px 90px #000b; text-align: center; }
+    dialog::backdrop { background: #0009; }
+    dialog h2 { margin: 0 0 8px; }
+    dialog p { color: #596070; }
+    button { border: 0; border-radius: 10px; padding: 12px 22px; font-size: 16px; cursor: pointer; }
+    #continue { background: #1677ff; color: white; font-weight: 600; }
+    #show { margin-top: 18px; background: #30384d; color: white; }
+    #result { min-height: 24px; margin-top: 14px; color: #78e6a1; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="video">
+      <div class="playing">▶ 测试视频正在播放<small>页面打开 5 秒后会自动弹出提示</small></div>
+      <dialog id="prompt">
+        <h2>你还在观看吗？</h2>
+        <p>为了继续播放，请确认你仍在观看。</p>
+        <button id="continue">我还在看</button>
+      </dialog>
+    </section>
+    <button id="show">立即重新显示弹窗</button>
+    <div id="result" aria-live="polite"></div>
+  </main>
+  <script>
+    const prompt = document.querySelector('#prompt');
+    const result = document.querySelector('#result');
+    const show = () => { result.textContent = ''; prompt.showModal(); };
+    document.querySelector('#show').addEventListener('click', show);
+    document.querySelector('#continue').addEventListener('click', () => {
+      prompt.close();
+      result.textContent = `✓ 已收到点击：${new Date().toLocaleTimeString()}`;
+    });
+    setTimeout(show, 5000);
+  </script>
+</body>
+</html>
