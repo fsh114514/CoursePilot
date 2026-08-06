@@ -1,14 +1,16 @@
-# CoursePilot
+# 网课视频播放助手 · CoursePilot
 
-## AI 网课播放辅助｜续课助手
+<p><img src="assets/coursepilot-icon.png" alt="CoursePilot 图标" width="112"></p>
 
-![CoursePilot 图标](assets/coursepilot-icon.png)
+> 视频看到一半，弹出“我还在看”又要手动点？
+>
+> CoursePilot 会在你选定的课程窗口中，用本地 OCR 识别白名单提示，并点击对应的继续观看按钮。选窗口、点启动，减少重复确认对学习过程的打断。
 
-CoursePilot 是一个面向 macOS 和 Windows 的本地 AI 屏幕识别工具，用来识别课程播放过程中出现的“我还在看”“继续观看”等确认提示，并在用户授权后点击对应按钮。
+CoursePilot 是一个面向 macOS 和 Windows 的本地屏幕识别工具。它不装浏览器插件、不注入网页，也不上传屏幕内容；只处理用户明确选择的窗口和提示词。
 
 它不依赖油猴脚本、浏览器插件或特定网站适配器，屏幕内容只在本机处理，适合重复出现观看确认弹窗的课程播放场景。
 
-> 当前状态：macOS Apple Silicon 版本已完成本机验证；Windows 适配器尚未实现，暂不能发布可用的 Windows 版本。
+> 当前状态：macOS Apple Silicon 版本已完成本机验证；Windows 测试适配器已接入，等待实体 Windows 电脑验证。
 
 ## 功能特点
 
@@ -18,7 +20,7 @@ CoursePilot 是一个面向 macOS 和 Windows 的本地 AI 屏幕识别工具，
 - 支持用户添加自定义按钮文字，并在设置页面显示内置提示词。
 - 不上传屏幕内容，不注入网页，不修改网页代码。
 - macOS 使用 Apple Vision 和 ScreenCaptureKit 本地处理。
-- 后续计划支持 Windows 原生窗口捕获和输入控制。
+- Windows 使用原生窗口列表、截图和鼠标输入控制；OCR 依赖本机 Tesseract。
 
 ## 搜索关键词
 
@@ -72,14 +74,14 @@ python3 -m venv .venv
 
 ## Windows 使用教程
 
-Windows 原生窗口捕获、OCR 和输入控制适配器正在开发中。
+Windows 版目前是测试包，已提供原生窗口列表、窗口预览、截图识别和鼠标点击功能。由于 Windows OCR 依赖本机 Tesseract，请先安装 Tesseract，并在安装时勾选中文语言包 `chi_sim`，确保 `tesseract.exe` 已加入 PATH。
 
-当前仓库中的 Windows 入口会明确提示尚未实现，因此暂不建议在 Windows 上安装或发布安装包。Windows 版本完成后，会补充：
+1. 在 Release 下载 `CoursePilot-Windows-x64.zip` 并解压。
+2. 启动 `CoursePilot.exe`。
+3. 点击“刷新窗口”，选择课程视频窗口并确认预览。
+4. 确认提示词后点击“开始监控”。
 
-1. Windows 安装包下载地址。
-2. 屏幕捕获权限说明。
-3. 窗口选择和预览步骤。
-4. Windows Defender 和输入控制注意事项。
+这是首个 Windows 测试包，尚未在本项目维护者的实体 Windows 电脑上完成验收；如果窗口列表、预览或 OCR 有问题，请附上系统版本和运行日志反馈。
 
 ## 本地测试页
 
@@ -93,12 +95,12 @@ Windows 原生窗口捕获、OCR 和输入控制适配器正在开发中。
 
 ## 当前 Release
 
-`v0.1.0` 目前只提供 macOS Apple Silicon 包：
+`v0.1.1` 提供 Windows x64 测试包，`v0.1.0` 提供 macOS Apple Silicon 包：
 
+- `CoursePilot-Windows-x64.zip`
+- `CoursePilot-Windows-x64.zip.sha256`
 - `CoursePilot-macOS-arm64.zip`
 - `CoursePilot-macOS-arm64.zip.sha256`
-
-Windows 安装包会在 Windows 原生适配器完成并经过另一台 Windows 电脑实测后再发布。
 
 ## 隐私与安全
 
@@ -111,7 +113,7 @@ Windows 安装包会在 Windows 原生适配器完成并经过另一台 Windows 
 
 ```text
 macOS：可用原型，已完成本地测试
-Windows：待实现
+Windows：测试版，待实体 Windows 电脑验证
 Linux：暂不计划
 ```
 
