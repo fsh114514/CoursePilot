@@ -1,0 +1,32 @@
+name: Build Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build Windows package
+        shell: pwsh
+        run: ./build_windows.ps1
+      - name: Upload Windows release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: CoursePilot ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/CoursePilot-Windows-x64.zip
+            dist/CoursePilot-Windows-x64.zip.sha256

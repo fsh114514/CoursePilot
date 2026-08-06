@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from .controller import MonitorController
 from .models import ALLOWED_PROMPTS, BLOCKED_PROMPT_WORDS, Window
 from .platforms.macos import MacOSAdapter
+from .platforms.windows import WindowsAdapter
 
 
 class LogBus(QObject):
@@ -37,7 +38,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("CoursePilot · 视频播放辅助")
         self.setMinimumSize(700, 680)
         self.resize(820, 900)
-        self.adapter = MacOSAdapter()
+        self.adapter = WindowsAdapter() if sys.platform == "win32" else MacOSAdapter()
         self.log_bus = LogBus()
         self.log_bus.message.connect(self.add_log)
         self.controller = MonitorController(self.adapter, self.log_bus.message.emit)
@@ -75,7 +76,8 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
-        intro = QLabel("本地识别指定窗口中的继续观看提示，只点击白名单文字附近的按钮。台前调度收起的窗口无法提供有效预览，请先把视频窗口放到当前调度组。")
+        intro_text = "本地识别指定窗口中的继续观看提示，只点击白名单文字附近的按钮。Windows 版需要先安装 Tesseract 中文语言包。" if sys.platform == "win32" else "本地识别指定窗口中的继续观看提示，只点击白名单文字附近的按钮。台前调度收起的窗口无法提供有效预览，请先把视频窗口放到当前调度组。"
+        intro = QLabel(intro_text)
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
@@ -120,7 +122,7 @@ class MainWindow(QMainWindow):
         permission_layout = QVBoxLayout(permission_box)
         permission_layout.addWidget(self.screen_permission)
         permission_layout.addWidget(self.control_permission)
-        permission_layout.addWidget(QLabel("请在系统设置中允许屏幕录制和辅助功能权限。"))
+        permission_layout.addWidget(QLabel("Windows 通常不需要额外权限；macOS 请在系统设置中允许屏幕录制和辅助功能权限。"))
         layout.addWidget(permission_box)
 
         layout.addWidget(self.start_button)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from typing import Any
 
 from .models import ALLOWED_PROMPTS, TextMatch
@@ -34,8 +35,18 @@ class PromptRecognizer:
 
         if self.pytesseract is None:
             return None
-        image = getattr(image, "pil_image", image)
-        data = self.pytesseract.image_to_data(image, output_type=self.pytesseract.Output.DICT, lang="eng")
+        frame = image
+        image = getattr(frame, "pil_image", frame)
+        scale_x = getattr(frame, "scale_x", 1.0)
+        scale_y = getattr(frame, "scale_y", 1.0)
+        lang = "eng"
+        if sys.platform == "win32":
+            try:
+                if "chi_sim" in self.pytesseract.get_languages(config=""):
+                    lang = "chi_sim+eng"
+            except Exception:
+                pass
+        data = self.pytesseract.image_to_data(image, output_type=self.pytesseract.Output.DICT, lang=lang)
         best: tuple[float, TextMatch] | None = None
         for index, raw in enumerate(data.get("text", [])):
             text = self._normalize(raw)
@@ -48,10 +59,10 @@ class PromptRecognizer:
                 confidence = float(data["conf"][index]) / 100
                 if confidence < 0.75:
                     continue
-                left = float(data["left"][index]) / getattr(image, "scale_x", 1.0)
-                top = float(data["top"][index]) / getattr(image, "scale_y", 1.0)
-                width = float(data["width"][index]) / getattr(image, "scale_x", 1.0)
-                height = float(data["height"][index]) / getattr(image, "scale_y", 1.0)
+                left = float(data["left"][index]) / scale_x
+                top = float(data["top"][index]) / scale_y
+                width = float(data["width"][index]) / scale_x
+                height = float(data["height"][index]) / scale_y
                 match = TextMatch(prompt, confidence, left + width / 2, top + height / 2)
                 score = confidence + (2 if text == target else 0)
                 if best is None or score > best[0]:
