@@ -36,6 +36,14 @@ class MacOSAdapter(PlatformAdapter):
     def __init__(self) -> None:
         if sys.platform != "darwin":
             raise RuntimeError("MacOSAdapter 只能在 macOS 上使用")
+        # ScreenCaptureKit 的 SCStream 需要 NSApplication 已初始化，
+        # 否则报 CGS_REQUIRE_INIT 导致截图失败（打包 app 里必须显式初始化）。
+        try:
+            from AppKit import NSApplication  # type: ignore
+
+            NSApplication.sharedApplication()
+        except Exception:
+            pass
         try:
             import Quartz  # type: ignore
             import ScreenCaptureKit  # type: ignore
