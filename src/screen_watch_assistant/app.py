@@ -126,12 +126,13 @@ class MainWindow(QMainWindow):
         permission_layout.addWidget(self.control_permission)
         permission_layout.addWidget(self.ocr_engine)
         if sys.platform == "darwin":
-            self.request_perm_button = QPushButton("请求屏幕录制权限")
+            self.request_perm_button = QPushButton("请求辅助功能权限")
             self.request_perm_button.clicked.connect(self.request_permissions)
             permission_layout.addWidget(self.request_perm_button)
             permission_layout.addWidget(QLabel(
-                "macOS 请在系统设置 → 隐私与安全性 → 屏幕录制 中允许 CoursePilot（注意：不是允许 Python 或终端）。"
-                "授权后需重启本应用才能生效。"
+                "macOS 捕捉窗口无需额外权限；自动点击需要辅助功能权限。"
+                "点击上方按钮会弹出授权框，允许 CoursePilot 即可。"
+                "如果未弹框，请到系统设置 → 隐私与安全性 → 辅助功能 中勾选 CoursePilot，授权后重启应用。"
             ))
         else:
             permission_layout.addWidget(QLabel("Windows 通常不需要额外权限。"))
@@ -164,14 +165,7 @@ class MainWindow(QMainWindow):
 
     def refresh_windows(self) -> None:
         selected_window_id = self.window_picker.currentData()
-        # macOS 无屏幕录制权限时，SCShareableContent 每次调用都会触发系统授权弹框。
-        # 为避免"点刷新就弹框"，先检查权限，无权限时不触发窗口枚举。
-        if sys.platform == "darwin":
-            screen, _control = self.adapter.permissions()
-            if not screen:
-                self.add_log("屏幕录制权限未就绪：请先到系统设置 → 隐私与安全性 → 屏幕录制 允许 CoursePilot，或点'请求屏幕录制权限'按钮。")
-                self.refresh_permissions()
-                return
+        # CoreGraphics 方案无需屏幕录制权限，直接枚举窗口
         try:
             windows = self.adapter.windows()
         except RuntimeError as exc:
@@ -190,10 +184,10 @@ class MainWindow(QMainWindow):
         self.add_log(f"刷新窗口列表：{len(windows)} 个")
 
     def request_permissions(self) -> None:
-        """主动弹出 macOS 屏幕录制授权框。"""
+        """主动弹出 macOS 辅助功能授权框（用于自动点击）。"""
         if hasattr(self.adapter, "request_screen_permission"):
             self.adapter.request_screen_permission()
-            self.add_log("已请求屏幕录制权限，请在系统弹窗中允许 CoursePilot，授权后重启应用。")
+            self.add_log("已请求辅助功能权限，请在系统弹窗中允许 CoursePilot。若未弹框，请到系统设置 → 隐私与安全性 → 辅助功能 手动勾选，授权后重启应用。")
 
     def refresh_permissions(self) -> None:
         screen, control = self.adapter.permissions()

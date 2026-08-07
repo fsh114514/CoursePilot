@@ -143,8 +143,13 @@ class MacOSAdapter(PlatformAdapter):
         height = max(1, int(cg_height * scale))
         if (width, height) != pil.size:
             pil = pil.resize((width, height))
-        scale_x = width / logical_width
-        scale_y = height / logical_height
+        # 坐标换算：Vision OCR 基于 native_image（CGImage，Retina 可能是 2x）。
+        # scale_x 用于把 CGImage 像素坐标换算回窗口逻辑坐标：
+        #   逻辑坐标 = CGImage坐标 / scale_x
+        # 因此 scale_x = cg_width / logical_width（Retina 下通常是 2.0）。
+        # 注意：不是 width/logical_width（那是缩放后 PIL 的比例，会算错）。
+        scale_x = cg_width / logical_width
+        scale_y = cg_height / logical_height
         return CapturedFrame(pil, cg_image, scale_x, scale_y)
 
     def click(self, window: Window, x: float, y: float) -> None:
@@ -193,12 +198,24 @@ class MacOSAdapter(PlatformAdapter):
                 ) or []
                 if refreshed:
                     bounds = refreshed[0].get(self.quartz.kCGWindowBounds) or bounds
-        screen_x = float(bounds.get("X", 0)) + x
-        screen_y = float(bounds.get("Y", 0)) + y
+        # 坐标换算：CGWindowBounds 的 Y 是底部原点（窗口底边到屏幕底部的距离）。
+        # OCR 坐标 (x, y) 是相对窗口左上角的向下距离（顶部原点）。
+        # 因此按钮的屏幕 Y（底部原点）= 窗口顶部(底部原点) - y
+        #   = (bounds.Y + bounds.Height) - y
+        window_x = float(bounds.get("X", 0))
+        window_bottom = float(bounds.get("Y", 0))
+        window_height = float(bounds.get("Height", 0))
+        screen_x = window_x + x
+        screen_y = window_bottom + window_height - y
         event_source = self.quartz.CGEventSourceCreate(self.quartz.kCGEventSourceStateHIDSystemState)
+        # 先移动鼠标到目标，再点击（Chrome 等对突然点击可能不响应）
+        move = self.quartz.CGEventCreateMouseEvent(event_source, self.quartz.kCGEventMouseMoved, (screen_x, screen_y), self.quartz.kCGMouseButtonLeft)
         down = self.quartz.CGEventCreateMouseEvent(event_source, self.quartz.kCGEventLeftMouseDown, (screen_x, screen_y), self.quartz.kCGMouseButtonLeft)
         up = self.quartz.CGEventCreateMouseEvent(event_source, self.quartz.kCGEventLeftMouseUp, (screen_x, screen_y), self.quartz.kCGMouseButtonLeft)
+        self.quartz.CGEventPost(self.quartz.kCGHIDEventTap, move)
+        time.sleep(0.05)
         self.quartz.CGEventPost(self.quartz.kCGHIDEventTap, down)
+        time.sleep(0.05)
         self.quartz.CGEventPost(self.quartz.kCGHIDEventTap, up)
 
     def permissions(self) -> tuple[bool, bool]:
@@ -209,5 +226,16 @@ class MacOSAdapter(PlatformAdapter):
         return True, control
 
     def request_screen_permission(self) -> None:
-        # CoreGraphics 方案无需屏幕录制权限，此方法保留为空实现
-        pass
+        """主动弹出辅助功能授权框（用于自动点击）。
+
+        AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+        会弹出 macOS 的辅助功能授权框，用户无需手动去系统设置找。
+        """
+        try:
+            from ApplicationServices import (
+                AXIsProcessTrustedWithOptions,
+                kAXTrustedCheckOptionPrompt,
+            )
+            AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+        except Exception:
+            pass
