@@ -178,7 +178,14 @@ class MainWindow(QMainWindow):
 
     def refresh_windows(self) -> None:
         selected_window_id = self.window_picker.currentData()
-        # CoreGraphics 方案无需屏幕录制权限，直接枚举窗口
+        # ScreenCaptureKit 需要屏幕录制权限。无权限时 SCShareableContent
+        # 会触发系统弹窗，且拿不到窗口。先检查权限，无权限时提示授权。
+        if sys.platform == "darwin":
+            screen, _control = self.adapter.permissions()
+            if not screen:
+                self.add_log("屏幕录制权限未就绪：请点'请求屏幕录制和辅助功能权限'按钮授权，或在系统设置 → 隐私与安全性 → 屏幕录制 中允许 CoursePilot，然后重启应用。")
+                self.refresh_permissions()
+                return
         try:
             windows = self.adapter.windows()
         except RuntimeError as exc:
