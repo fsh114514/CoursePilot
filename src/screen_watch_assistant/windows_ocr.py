@@ -10,7 +10,6 @@ tesseract 对彩色反色 UI 小字（如蓝色按钮上的白字）识别不可
 from __future__ import annotations
 
 import io
-import threading
 from typing import Any
 
 
@@ -26,7 +25,6 @@ class WindowsOCREngine:
     def __init__(self) -> None:
         self._engine: Any = None
         self._error: str | None = None
-        self._lock = threading.Lock()
         try:
             from winsdk.windows.media.ocr import OcrEngine
             from winsdk.windows.globalization import Language
