@@ -58,6 +58,9 @@ class MacOSAdapter(PlatformAdapter):
         self._window_cache = {}
         current_pid = os.getpid()
         for info in info_list:
+            # 关键：kCGWindowName（窗口标题）在无屏幕录制权限时会被省略。
+            # 此时 title 为空，但 kCGWindowOwnerName（应用名）和 bounds 仍可用。
+            # 因此用 owner 识别窗口，不依赖 title（无权限时 title 为空也保留）。
             title = str(info.get(self.quartz.kCGWindowName, "") or "").strip()
             owner = str(info.get(self.quartz.kCGWindowOwnerName, "") or "")
             window_id = int(info.get(self.quartz.kCGWindowNumber, 0))
@@ -66,17 +69,16 @@ class MacOSAdapter(PlatformAdapter):
             width = float(bounds.get("Width", 0))
             height = float(bounds.get("Height", 0))
             if (
-                not title
-                or title.lower() == "undefined"
-                or not owner
+                not owner
                 or owner in hidden_owners
-                or (owner == "ChatGPT" and ("Codex Pet" in title or "Voice Controls Glass" in title))
                 or pid == current_pid
                 or width < 300
                 or height < 200
             ):
                 continue
-            window = Window(window_id, title, owner)
+            # 无标题时用 owner 作为显示名（无权限环境）
+            display_title = title or owner
+            window = Window(window_id, display_title, owner)
             self._window_cache[window.id] = info
             result.append(window)
         return sorted(result, key=lambda window: (window.owner.casefold(), window.title.casefold()))
@@ -122,12 +124,18 @@ class MacOSAdapter(PlatformAdapter):
         if data is None:
             return None
         raw = bytes(data)
-        # CGImage 可能是 32 位 BGRA 或 24 位 RGB
-        bytes_per_pixel = raw and len(raw) // (cg_width * cg_height) or 4
-        if bytes_per_pixel >= 4:
-            pil = Image.frombytes("RGBA", (cg_width, cg_height), raw, "raw", "BGRA", 0, 1).convert("RGB")
+        # 关键：CGImage 数据每行可能有 padding（stride ≠ width*bpp）。
+        # 必须用 CGImageGetBytesPerRow 的 stride，否则 frombytes 会错乱/空白。
+        bits_per_pixel = self.quartz.CGImageGetBitsPerPixel(cg_image)
+        bytes_per_row = self.quartz.CGImageGetBytesPerRow(cg_image)
+        if bits_per_pixel >= 32:
+            pil = Image.frombytes(
+                "RGBA", (cg_width, cg_height), raw, "raw", "BGRA", bytes_per_row, 1
+            ).convert("RGB")
         else:
-            pil = Image.frombytes("RGB", (cg_width, cg_height), raw, "raw", "RGB", 0, 1)
+            pil = Image.frombytes(
+                "RGB", (cg_width, cg_height), raw, "raw", "RGB", bytes_per_row, 1
+            )
 
         # 缩放控制尺寸（避免过大的图拖慢 OCR）
         scale = min(1.0, 1600 / cg_width, 1000 / cg_height)
