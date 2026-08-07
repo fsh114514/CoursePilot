@@ -6,18 +6,23 @@ from collections.abc import Callable
 
 from .models import ALLOWED_PROMPTS, TextMatch, Window
 from .platforms.base import PlatformAdapter
-from .recognizer import PromptRecognizer
+from .recognizer_base import BaseRecognizer
 
 
 class MonitorController:
-    def __init__(self, adapter: PlatformAdapter, on_log: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        adapter: PlatformAdapter,
+        on_log: Callable[[str], None],
+        recognizer_cls: type[BaseRecognizer],
+    ) -> None:
         self.adapter = adapter
         self.on_log = on_log
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.ocr_error: str | None = None
         try:
-            self.recognizer = PromptRecognizer(ALLOWED_PROMPTS)
+            self.recognizer = recognizer_cls(ALLOWED_PROMPTS)
         except RuntimeError as exc:
             self.recognizer = None
             self.ocr_error = str(exc)

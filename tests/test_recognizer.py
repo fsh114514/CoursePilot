@@ -1,5 +1,6 @@
 from screen_watch_assistant.models import ALLOWED_PROMPTS
-from screen_watch_assistant.recognizer import PromptRecognizer
+from screen_watch_assistant.recognizer_base import BaseRecognizer
+from screen_watch_assistant.windows_recognizer import WindowsRecognizer
 
 
 def test_allowed_prompt_list_is_narrow_and_stable() -> None:
@@ -9,12 +10,12 @@ def test_allowed_prompt_list_is_narrow_and_stable() -> None:
 
 
 def test_normalize_removes_spaces_and_ignores_case() -> None:
-    assert PromptRecognizer._normalize(" Continue  Watching ") == "continuewatching"
+    assert BaseRecognizer._normalize(" Continue  Watching ") == "continuewatching"
 
 
 def test_body_sentence_is_not_an_exact_prompt() -> None:
-    assert PromptRecognizer._is_exact_prompt("继续播放", "继续播放")
-    assert not PromptRecognizer._is_exact_prompt("为了继续播放，请确认你仍在观看", "继续播放")
+    assert BaseRecognizer._is_exact_prompt("继续播放", "继续播放")
+    assert not BaseRecognizer._is_exact_prompt("为了继续播放，请确认你仍在观看", "继续播放")
 
 
 def _tesseract_data(words):
@@ -35,7 +36,7 @@ def _tesseract_data(words):
 
 def test_tesseract_split_words_are_matched_across_line() -> None:
     """tesseract 把「我还在看」拆成 4 个独立 word 时，也要能识别。"""
-    r = PromptRecognizer(("我还在看",))
+    r = WindowsRecognizer(("我还在看",))
     data = _tesseract_data([
         ("我", 23, 24, 72, 42, 96),
         ("还", 119, 22, 22, 44, 96),
@@ -50,7 +51,7 @@ def test_tesseract_split_words_are_matched_across_line() -> None:
 
 def test_tesseract_prompt_in_sentence_gets_center() -> None:
     """提示词嵌在一句话中间时，返回的是提示词本身的中心点。"""
-    r = PromptRecognizer(("继续观看",))
+    r = WindowsRecognizer(("继续观看",))
     data = _tesseract_data([
         ("请", 10, 10, 20, 20, 95),
         ("继续", 40, 10, 40, 20, 95),
@@ -93,7 +94,7 @@ def _windows_ocr_lines():
 
 def test_windows_ocr_matches_button_text() -> None:
     """Windows OCR 识别出「我还在看」按钮时能匹配并定位中心。"""
-    r = PromptRecognizer(("我还在看",))
+    r = WindowsRecognizer(("我还在看",))
     # 模拟 win_ocr
     class FakeWinOCR:
         available = True

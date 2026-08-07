@@ -24,8 +24,21 @@ from PySide6.QtWidgets import (
 
 from .controller import MonitorController
 from .models import ALLOWED_PROMPTS, BLOCKED_PROMPT_WORDS, Window
-from .platforms.macos import MacOSAdapter
-from .platforms.windows import WindowsAdapter
+from .recognizer_base import BaseRecognizer
+
+# 彻底拆分：macOS 和 Windows 用完全独立的适配器 + 识别器
+if sys.platform == "darwin":
+    from .macos_recognizer import MacOSRecognizer
+    from .platforms.macos import MacOSAdapter
+
+    ADAPTER_CLS = MacOSAdapter
+    RECOGNIZER_CLS: type[BaseRecognizer] = MacOSRecognizer
+else:
+    from .windows_recognizer import WindowsRecognizer
+    from .platforms.windows import WindowsAdapter
+
+    ADAPTER_CLS = WindowsAdapter
+    RECOGNIZER_CLS: type[BaseRecognizer] = WindowsRecognizer
 
 
 class LogBus(QObject):
@@ -38,10 +51,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("CoursePilot · 视频播放辅助")
         self.setMinimumSize(700, 680)
         self.resize(820, 900)
-        self.adapter = WindowsAdapter() if sys.platform == "win32" else MacOSAdapter()
+        self.adapter = ADAPTER_CLS()
         self.log_bus = LogBus()
         self.log_bus.message.connect(self.add_log)
-        self.controller = MonitorController(self.adapter, self.log_bus.message.emit)
+        self.controller = MonitorController(self.adapter, self.log_bus.message.emit, RECOGNIZER_CLS)
         self.window_map: dict[int, Window] = {}
         self.preview_pixmap: QPixmap | None = None
         self.settings = QSettings("ScreenWatchAssistant", "ScreenWatchAssistant")
@@ -126,13 +139,13 @@ class MainWindow(QMainWindow):
         permission_layout.addWidget(self.control_permission)
         permission_layout.addWidget(self.ocr_engine)
         if sys.platform == "darwin":
-            self.request_perm_button = QPushButton("请求辅助功能权限")
+            self.request_perm_button = QPushButton("请求屏幕录制和辅助功能权限")
             self.request_perm_button.clicked.connect(self.request_permissions)
             permission_layout.addWidget(self.request_perm_button)
             permission_layout.addWidget(QLabel(
-                "macOS 捕捉窗口无需额外权限；自动点击需要辅助功能权限。"
-                "点击上方按钮会弹出授权框，允许 CoursePilot 即可。"
-                "如果未弹框，请到系统设置 → 隐私与安全性 → 辅助功能 中勾选 CoursePilot，授权后重启应用。"
+                "macOS 需要屏幕录制权限（捕捉窗口/预览）和辅助功能权限（自动点击）。"
+                "点击上方按钮会依次弹出授权框，允许 CoursePilot 即可。"
+                "若未弹框，请到系统设置 → 隐私与安全性 → 屏幕录制 / 辅助功能 中勾选 CoursePilot，授权后重启应用。"
             ))
         else:
             permission_layout.addWidget(QLabel("Windows 通常不需要额外权限。"))
@@ -184,10 +197,12 @@ class MainWindow(QMainWindow):
         self.add_log(f"刷新窗口列表：{len(windows)} 个")
 
     def request_permissions(self) -> None:
-        """主动弹出 macOS 辅助功能授权框（用于自动点击）。"""
+        """主动弹出 macOS 屏幕录制 + 辅助功能授权框。"""
         if hasattr(self.adapter, "request_screen_permission"):
             self.adapter.request_screen_permission()
-            self.add_log("已请求辅助功能权限，请在系统弹窗中允许 CoursePilot。若未弹框，请到系统设置 → 隐私与安全性 → 辅助功能 手动勾选，授权后重启应用。")
+        if hasattr(self.adapter, "request_accessibility_permission"):
+            self.adapter.request_accessibility_permission()
+        self.add_log("已请求屏幕录制和辅助功能权限，请在系统弹窗中允许 CoursePilot。授权后重启应用以生效。")
 
     def refresh_permissions(self) -> None:
         screen, control = self.adapter.permissions()
