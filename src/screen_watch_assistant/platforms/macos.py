@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import threading
 import time
 from typing import Any
 
 if sys.platform == "darwin":
-    from Foundation import NSObject  # type: ignore
+    import Quartz  # type: ignore
 else:
-    NSObject = object  # type: ignore[misc,assignment]
+    Quartz = None  # type: ignore
 
 from ..models import Window
 from .base import PlatformAdapter
@@ -23,26 +23,25 @@ class CapturedFrame:
         self.scale_y = scale_y
 
 
-class ScreenCaptureOutputDelegate(NSObject):
-    def stream_didOutputSampleBuffer_ofType_(
-        self, stream: Any, sample_buffer: Any, output_type: int
-    ) -> None:
-        self.handle_sample(sample_buffer)
-
-
 class MacOSAdapter(PlatformAdapter):
+    """macOS 适配器，用 CoreGraphics（CGWindowList）捕捉窗口。
+
+    为什么不用 ScreenCaptureKit（SCShareableContent/SCStream）：
+    SCShareableContent 在 macOS Sequoia+ 上每次调用都会触发
+    "系统私有窗口选择器"权限弹窗，且依赖稳定的代码签名身份
+    （adhoc 签名的无证书 app 权限反复失效）。
+    而 CGWindowListCopyWindowInfo / CGWindowListCreateImage 是
+    老牌 API，无需屏幕录制权限弹窗，adhoc 签名也可用（已实测）。
+    """
+
     def __init__(self) -> None:
         if sys.platform != "darwin":
             raise RuntimeError("MacOSAdapter 只能在 macOS 上使用")
-        try:
-            import Quartz  # type: ignore
-            import ScreenCaptureKit  # type: ignore
-        except ImportError as exc:
-            raise RuntimeError("缺少 macOS 屏幕捕捉依赖，请安装 macos 依赖") from exc
+        if Quartz is None:
+            raise RuntimeError("缺少 macOS 屏幕捕捉依赖（Quartz）")
         self.quartz = Quartz
-        self.screen_capture_kit = ScreenCaptureKit
-        self._shareable_windows: dict[int, Any] = {}
         self._capture_lock = threading.Lock()
+        self._window_cache: dict[int, dict[str, Any]] = {}
 
     def windows(self) -> list[Window]:
         hidden_owners = {
@@ -51,157 +50,94 @@ class MacOSAdapter(PlatformAdapter):
             "ChatGPT Computer Use",
             "程序坞", "通知中心", "聚焦", "问题报告程序",
         }
-        content = self._get_shareable_content()
+        info_list = self.quartz.CGWindowListCopyWindowInfo(
+            self.quartz.kCGWindowListOptionOnScreenOnly,
+            self.quartz.kCGNullWindowID,
+        ) or []
         result: list[Window] = []
-        self._shareable_windows = {}
-        for sc_window in content.windows():
-            title = str(sc_window.title() or "").strip()
-            application = sc_window.owningApplication()
-            owner = str(application.applicationName() if application else "未知应用")
-            pid = int(application.processID()) if application else 0
-            frame = sc_window.frame()
+        self._window_cache = {}
+        current_pid = os.getpid()
+        for info in info_list:
+            title = str(info.get(self.quartz.kCGWindowName, "") or "").strip()
+            owner = str(info.get(self.quartz.kCGWindowOwnerName, "") or "")
+            window_id = int(info.get(self.quartz.kCGWindowNumber, 0))
+            pid = int(info.get(self.quartz.kCGWindowOwnerPID, 0))
+            bounds = info.get(self.quartz.kCGWindowBounds, {})
+            width = float(bounds.get("Width", 0))
+            height = float(bounds.get("Height", 0))
             if (
                 not title
                 or title.lower() == "undefined"
                 or not owner
                 or owner in hidden_owners
                 or (owner == "ChatGPT" and ("Codex Pet" in title or "Voice Controls Glass" in title))
-                or pid == os.getpid()
-                # Stage Manager exposes windows in other groups as tiny
-                # thumbnails. They are not valid capture targets.
-                or frame.size.width < 300
-                or frame.size.height < 200
+                or pid == current_pid
+                or width < 300
+                or height < 200
             ):
                 continue
-            window = Window(int(sc_window.windowID()), title, owner)
-            self._shareable_windows[window.id] = sc_window
+            window = Window(window_id, title, owner)
+            self._window_cache[window.id] = info
             result.append(window)
         return sorted(result, key=lambda window: (window.owner.casefold(), window.title.casefold()))
-
-    def _get_shareable_content(self) -> Any:
-        event = threading.Event()
-        result: dict[str, Any] = {}
-
-        def completed(content: Any, error: Any) -> None:
-            result["content"] = content
-            result["error"] = error
-            event.set()
-
-        self.screen_capture_kit.SCShareableContent.getShareableContentWithCompletionHandler_(completed)
-        if not event.wait(3):
-            raise RuntimeError("获取可捕捉窗口超时")
-        if result.get("error") is not None or result.get("content") is None:
-            raise RuntimeError(f"获取可捕捉窗口失败：{result.get('error')}")
-        return result["content"]
 
     def capture(self, window: Window) -> Any:
         with self._capture_lock:
             return self._capture_window(window)
 
     def _capture_window(self, window: Window) -> Any:
-        sc_window = self._shareable_windows.get(window.id)
-        if sc_window is None:
+        # 获取窗口信息（优先用缓存的，避免频繁枚举）
+        info = self._window_cache.get(window.id)
+        if info is None:
             self.windows()
-            sc_window = self._shareable_windows.get(window.id)
-        if sc_window is None:
+            info = self._window_cache.get(window.id)
+        if info is None:
+            return None
+        bounds = info.get(self.quartz.kCGWindowBounds, {})
+        logical_width = int(float(bounds.get("Width", 0)))
+        logical_height = int(float(bounds.get("Height", 0)))
+        if logical_width < 300 or logical_height < 200:
             return None
 
+        # 用 CGWindowListCreateImage 捕捉窗口内容（无需屏幕录制权限弹窗）
+        cg_image = self.quartz.CGWindowListCreateImage(
+            self.quartz.CGRectMake(0, 0, logical_width, logical_height),
+            self.quartz.kCGWindowListOptionIncludingWindow,
+            window.id,
+            self.quartz.kCGWindowImageBoundsIgnoreFraming | self.quartz.kCGWindowImageShouldBeOpaque,
+        )
+        if cg_image is None:
+            return None
+
+        cg_width = int(self.quartz.CGImageGetWidth(cg_image))
+        cg_height = int(self.quartz.CGImageGetHeight(cg_image))
+        if cg_width <= 0 or cg_height <= 0:
+            return None
+
+        # CGImage → PIL 图像（RGBA/BGRA）
         from PIL import Image
-        import CoreMedia  # type: ignore
 
-        frame = sc_window.frame()
-        if frame.size.width < 300 or frame.size.height < 200:
+        provider = self.quartz.CGImageGetDataProvider(cg_image)
+        data = self.quartz.CGDataProviderCopyData(provider)
+        if data is None:
             return None
-        logical_width = max(1, int(frame.size.width))
-        logical_height = max(1, int(frame.size.height))
-        scale = min(1.0, 1600 / logical_width, 1000 / logical_height)
-        width = max(1, int(logical_width * scale))
-        height = max(1, int(logical_height * scale))
-        config = self.screen_capture_kit.SCStreamConfiguration.alloc().init()
-        config.setWidth_(width)
-        config.setHeight_(height)
-        config.setPixelFormat_(1111970369)  # kCVPixelFormatType_32BGRA
-        config.setMinimumFrameInterval_(CoreMedia.CMTimeMake(1, 30))
-        config.setShowsCursor_(False)
-        config.setIgnoreShadowsSingleWindow_(True)
-        content_filter = self.screen_capture_kit.SCContentFilter.alloc().initWithDesktopIndependentWindow_(sc_window)
-        event = threading.Event()
-        result: dict[str, Any] = {}
+        raw = bytes(data)
+        # CGImage 可能是 32 位 BGRA 或 24 位 RGB
+        bytes_per_pixel = raw and len(raw) // (cg_width * cg_height) or 4
+        if bytes_per_pixel >= 4:
+            pil = Image.frombytes("RGBA", (cg_width, cg_height), raw, "raw", "BGRA", 0, 1).convert("RGB")
+        else:
+            pil = Image.frombytes("RGB", (cg_width, cg_height), raw, "raw", "RGB", 0, 1)
 
-        def handle_sample(sample_buffer: Any) -> None:
-            if event.is_set():
-                return
-            try:
-                pixel_buffer = CoreMedia.CMSampleBufferGetImageBuffer(sample_buffer)
-                if pixel_buffer is None:
-                    return
-                quartz = self.quartz
-                quartz.CVPixelBufferLockBaseAddress(pixel_buffer, 0)
-                try:
-                    base_address = quartz.CVPixelBufferGetBaseAddress(pixel_buffer)
-                    size = quartz.CVPixelBufferGetDataSize(pixel_buffer)
-                    raw = b"".join(base_address[:size])
-                    result["image"] = Image.frombytes(
-                        "RGBA",
-                        (quartz.CVPixelBufferGetWidth(pixel_buffer), quartz.CVPixelBufferGetHeight(pixel_buffer)),
-                        raw,
-                        "raw",
-                        "BGRA",
-                        quartz.CVPixelBufferGetBytesPerRow(pixel_buffer),
-                        1,
-                    )
-                    provider = quartz.CGDataProviderCreateWithCFData(raw)
-                    result["native_image"] = quartz.CGImageCreate(
-                        quartz.CVPixelBufferGetWidth(pixel_buffer),
-                        quartz.CVPixelBufferGetHeight(pixel_buffer),
-                        8,
-                        32,
-                        quartz.CVPixelBufferGetBytesPerRow(pixel_buffer),
-                        quartz.CGColorSpaceCreateDeviceRGB(),
-                        quartz.kCGImageAlphaPremultipliedFirst | quartz.kCGBitmapByteOrder32Little,
-                        provider,
-                        None,
-                        False,
-                        quartz.kCGRenderingIntentDefault,
-                    )
-                finally:
-                    quartz.CVPixelBufferUnlockBaseAddress(pixel_buffer, 0)
-            except Exception as exc:
-                result["error"] = exc
-            finally:
-                event.set()
-
-        delegate = ScreenCaptureOutputDelegate.alloc().init()
-        delegate.handle_sample = handle_sample
-        stream = self.screen_capture_kit.SCStream.alloc().initWithFilter_configuration_delegate_(
-            content_filter, config, delegate
-        )
-        added, error = stream.addStreamOutput_type_sampleHandlerQueue_error_(
-            delegate, self.screen_capture_kit.SCStreamOutputTypeScreen, None, None
-        )
-        if not added or error is not None:
-            return None
-        def started(start_error: Any) -> None:
-            if start_error is not None:
-                result["error"] = start_error
-                event.set()
-
-        stream.startCaptureWithCompletionHandler_(started)
-        event.wait(3)
-        stopped = threading.Event()
-        stream.stopCaptureWithCompletionHandler_(lambda stop_error: stopped.set())
-        stopped.wait(1)
-        if result.get("error") is not None:
-            raise RuntimeError(f"窗口捕捉失败：{result['error']}")
-        image = result.get("image")
-        if image is None:
-            return None
-        return CapturedFrame(
-            image,
-            result.get("native_image"),
-            width / logical_width,
-            height / logical_height,
-        )
+        # 缩放控制尺寸（避免过大的图拖慢 OCR）
+        scale = min(1.0, 1600 / cg_width, 1000 / cg_height)
+        width = max(1, int(cg_width * scale))
+        height = max(1, int(cg_height * scale))
+        if (width, height) != pil.size:
+            pil = pil.resize((width, height))
+        scale_x = width / logical_width
+        scale_y = height / logical_height
+        return CapturedFrame(pil, cg_image, scale_x, scale_y)
 
     def click(self, window: Window, x: float, y: float) -> None:
         # The adapter intentionally exposes only a point click. It does not inject
@@ -258,24 +194,12 @@ class MacOSAdapter(PlatformAdapter):
         self.quartz.CGEventPost(self.quartz.kCGHIDEventTap, up)
 
     def permissions(self) -> tuple[bool, bool]:
-        screen = bool(self.quartz.CGPreflightScreenCaptureAccess())
+        # CGWindowList 捕捉不需要屏幕录制权限；辅助功能用于点击
         from ApplicationServices import AXIsProcessTrusted  # type: ignore
 
         control = bool(AXIsProcessTrusted())
-        return screen, control
+        return True, control
 
     def request_screen_permission(self) -> None:
-        """主动请求屏幕录制权限（macOS 10.15+）。
-
-        调用 CGRequestScreenCaptureAccess() 会弹出系统授权框，
-        用户无需手动去"系统设置"里找。注意：
-        - 只能在 GUI 会话中调用才会弹框
-        - 只能触发一次，之后需要用户去系统设置更改
-        - 打包的 .app 是独立二进制，需要单独授权（不是 Python/终端）
-        """
-        request = getattr(self.quartz, "CGRequestScreenCaptureAccess", None)
-        if request is not None:
-            try:
-                request()
-            except Exception:
-                pass
+        # CoreGraphics 方案无需屏幕录制权限，此方法保留为空实现
+        pass

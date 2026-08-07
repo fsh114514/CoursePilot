@@ -52,18 +52,24 @@ class PromptRecognizer:
         self.prompts = prompts
         self.engine_status = ""
         self._engine_ready = False
-        # 兜底默认值（Windows OCR 可用时 _configure_tesseract 不会执行）
+        # 兜底默认值（各分支可能不会全部初始化）
         self._tesseract_langs: tuple[str, ...] = ()
         self._bundled = False
-        # Windows 自带 OCR（准确率高，优先使用）
-        self.win_ocr = _make_windows_ocr()
-        if self.win_ocr is not None and self.win_ocr.available:
+        self.win_ocr = None
+        # macOS 用 Apple Vision（无需额外依赖）
+        if self.vision is not None:
             self._engine_ready = True
-            self.engine_status = "✓ OCR 引擎就绪（系统 OCR）"
+            self.engine_status = "✓ OCR 引擎就绪（Apple Vision）"
         else:
-            self._configure_tesseract()
-        if self.vision is None and not self._engine_ready:
-            self.engine_status = "未找到 OCR 引擎（macOS 需 Apple Vision 框架，Windows 需系统 OCR 或 Tesseract）"
+            # Windows 自带 OCR（准确率高，优先使用）
+            self.win_ocr = _make_windows_ocr()
+            if self.win_ocr is not None and self.win_ocr.available:
+                self._engine_ready = True
+                self.engine_status = "✓ OCR 引擎就绪（系统 OCR）"
+            else:
+                self._configure_tesseract()
+            if not self._engine_ready:
+                self.engine_status = "未找到 OCR 引擎（Windows 需系统 OCR 或 Tesseract）"
 
     def _configure_tesseract(self) -> None:
         """决定 tesseract 命令路径与引擎状态。"""
@@ -120,11 +126,11 @@ class PromptRecognizer:
 
     def find(self, image: Any) -> TextMatch | None:
         native_image = getattr(image, "native_image", None)
+        # macOS 用 Apple Vision 识别（native_image 是 CGImage）。
+        # Vision 是 macOS 的唯一引擎：识别到就返回，未识别到直接返回 None，
+        # 不回退 tesseract（tesseract 是 Windows 的兜底）。
         if native_image is not None and self.vision is not None:
-            match = self._find_with_vision(native_image, getattr(image, "scale_x", 1.0), getattr(image, "scale_y", 1.0))
-            # macOS 用 Vision，识别到就直接返回；未识别到则回退 pytesseract（若引擎就绪）
-            if match is not None or not self._engine_ready:
-                return match
+            return self._find_with_vision(native_image, getattr(image, "scale_x", 1.0), getattr(image, "scale_y", 1.0))
 
         if not self._engine_ready:
             return None
