@@ -34,11 +34,18 @@ $WinSDKHiddenImports = @(
     "winsdk.windows.foundation"
 ) | ForEach-Object { "--hidden-import", $_ }
 
+# 防误报配置：
+# - --noupx：禁用 UPX 压缩（UPX 是杀软误报主因）
+# - --version-file：给 exe 加正规版本/公司信息（降低"匿名文件"误报）
+# - 目录版（onedir）为主：onefile 运行时自解压误报率高
+# - 单文件版（onefile）仍提供，但用相同防误报配置
+
 # === 1) 目录版（onedir）：启动快，zip 分发 ===
 # 注：用 --add-data 而非 --add-binary，避免 PyInstaller 对 tesseract.exe
 #     做 PE 依赖分析而报缺 DLL；整个目录当作数据拷进 _internal/tesseract/
-& $PythonExe -m PyInstaller --noconfirm --clean --windowed --name CoursePilot `
+& $PythonExe -m PyInstaller --noconfirm --clean --windowed --noupx --name CoursePilot `
     --icon assets/CoursePilot.ico --paths src `
+    --version-file version_info.txt `
     @WinSDKHiddenImports `
     --add-data "vendor/tesseract;tesseract" `
     src/coursepilot_launcher.py
@@ -49,8 +56,9 @@ Compress-Archive -Path dist/CoursePilot -DestinationPath dist/CoursePilot-Window
 
 # === 2) 单文件版（onefile）：免解压，双击即用 ===
 # 用独立名称避免与 onedir 产物冲突
-& $PythonExe -m PyInstaller --noconfirm --clean --windowed --onefile --name CoursePilot `
+& $PythonExe -m PyInstaller --noconfirm --clean --windowed --onefile --noupx --name CoursePilot `
     --icon assets/CoursePilot.ico --paths src `
+    --version-file version_info.txt `
     @WinSDKHiddenImports `
     --add-data "vendor/tesseract;tesseract" `
     src/coursepilot_launcher.py
