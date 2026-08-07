@@ -251,12 +251,19 @@ class MacOSAdapter(PlatformAdapter):
                 ) or []
                 if refreshed:
                     bounds = refreshed[0].get(self.quartz.kCGWindowBounds) or bounds
-        # 坐标换算：CGWindowBounds 的 Y 是底部原点，OCR 坐标是相对窗口顶部向下。
+        # 坐标换算：
+        # CGWindowBounds 的 Y 是窗口顶部距屏幕顶部的距离（顶部原点）。
+        # CGEvent 用的是底部原点坐标系（屏幕左下角为原点）。
+        # 因此：
+        #   screen_x = bounds.X + x                    （X 两个坐标系一致）
+        #   screen_y = 屏幕高度 - (bounds.Y + y)       （转底部原点）
+        # 其中 y 是 OCR 返回的窗口相对坐标（从窗口顶部向下）。
+        main = self.quartz.CGDisplayBounds(self.quartz.CGMainDisplayID())
+        screen_height = float(main.size.height)
         window_x = float(bounds.get("X", 0))
-        window_bottom = float(bounds.get("Y", 0))
-        window_height = float(bounds.get("Height", 0))
+        window_top = float(bounds.get("Y", 0))
         screen_x = window_x + x
-        screen_y = window_bottom + window_height - y
+        screen_y = screen_height - (window_top + y)
         event_source = self.quartz.CGEventSourceCreate(self.quartz.kCGEventSourceStateHIDSystemState)
         move = self.quartz.CGEventCreateMouseEvent(event_source, self.quartz.kCGEventMouseMoved, (screen_x, screen_y), self.quartz.kCGMouseButtonLeft)
         down = self.quartz.CGEventCreateMouseEvent(event_source, self.quartz.kCGEventLeftMouseDown, (screen_x, screen_y), self.quartz.kCGMouseButtonLeft)
