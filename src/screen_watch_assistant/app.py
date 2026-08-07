@@ -164,6 +164,14 @@ class MainWindow(QMainWindow):
 
     def refresh_windows(self) -> None:
         selected_window_id = self.window_picker.currentData()
+        # macOS 无屏幕录制权限时，SCShareableContent 每次调用都会触发系统授权弹框。
+        # 为避免"点刷新就弹框"，先检查权限，无权限时不触发窗口枚举。
+        if sys.platform == "darwin":
+            screen, _control = self.adapter.permissions()
+            if not screen:
+                self.add_log("屏幕录制权限未就绪：请先到系统设置 → 隐私与安全性 → 屏幕录制 允许 CoursePilot，或点'请求屏幕录制权限'按钮。")
+                self.refresh_permissions()
+                return
         try:
             windows = self.adapter.windows()
         except RuntimeError as exc:
