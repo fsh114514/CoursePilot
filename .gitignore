@@ -11,3 +11,6 @@ dist/
 *.log
 *.spec
 assets/CoursePilot.iconset/
+
+# Windows 版内置 Tesseract 引擎（构建前由 scripts/fetch_tesseract_win.sh 生成）
+vendor/tesseract/

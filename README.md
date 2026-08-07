@@ -74,14 +74,14 @@ python3 -m venv .venv
 
 ## Windows 使用教程
 
-Windows 版目前是测试包，已提供原生窗口列表、窗口预览、截图识别和鼠标点击功能。由于 Windows OCR 依赖本机 Tesseract，请先安装 Tesseract，并在安装时勾选中文语言包 `chi_sim`，确保 `tesseract.exe` 已加入 PATH。
+Windows 版提供原生窗口列表、窗口预览、截图识别和鼠标点击功能。**OCR 使用 Windows 系统自带识别引擎（Windows.Media.Ocr），无需安装任何额外组件**；内置 Tesseract 作为兜底备用。
 
-1. 在 Release 下载 `CoursePilot-Windows-x64.zip` 并解压。
+1. 在 Release 下载 `CoursePilot-Windows-x64.zip`（解压版）或 `CoursePilot-Windows-x64.exe`（单文件免解压版）。
 2. 启动 `CoursePilot.exe`。
 3. 点击“刷新窗口”，选择课程视频窗口并确认预览。
 4. 确认提示词后点击“开始监控”。
 
-这是首个 Windows 测试包，尚未在本项目维护者的实体 Windows 电脑上完成验收；如果窗口列表、预览或 OCR 有问题，请附上系统版本和运行日志反馈。
+> 架构说明：`CoursePilot-Windows-x64.zip` / `.exe` 是 x64 架构，可在 64 位 Windows 上原生运行，也能在 Windows on ARM（如骁龙本）的 x64 模拟层下运行。
 
 ## 本地测试页
 
@@ -95,12 +95,39 @@ Windows 版目前是测试包，已提供原生窗口列表、窗口预览、截
 
 ## 当前 Release
 
-`v0.1.1` 提供 Windows x64 测试包，`v0.1.0` 提供 macOS Apple Silicon 包：
+每个版本提供 Windows 和 macOS 两套独立安装包（含解压版与免解压版）：
 
-- `CoursePilot-Windows-x64.zip`
-- `CoursePilot-Windows-x64.zip.sha256`
-- `CoursePilot-macOS-arm64.zip`
-- `CoursePilot-macOS-arm64.zip.sha256`
+- Windows x64：
+  - `CoursePilot-Windows-x64.zip`（解压版，含内置 Tesseract OCR）
+  - `CoursePilot-Windows-x64.exe`（单文件免解压版）
+  - 各自的 `.sha256` 校验文件
+- macOS arm64：
+  - `CoursePilot-macOS-arm64.zip`（解压版）
+  - `CoursePilot-macOS-arm64.dmg`（磁盘镜像免解压版）
+  - 各自的 `.sha256` 校验文件
+
+## 构建 Release
+
+前置：macOS 用 Apple Vision 识别，无需额外依赖；Windows 版用系统自带 OCR（需 Python 3.12，因 winsdk 只提供到 cp312 的 wheel），同时内置 Tesseract 引擎兜底，构建前由脚本自动获取 Tesseract。
+
+```sh
+# Windows（在 Windows 或能跑 bash 的环境执行）
+./scripts/fetch_tesseract_win.sh   # 获取并裁剪 Tesseract 引擎到 vendor/tesseract/
+./build_windows.ps1                # 产出 zip（解压版）和 exe（单文件版）+ sha256
+
+# macOS（在 Apple Silicon Mac 上执行）
+./build_macos.command              # 产出 zip 和 dmg + sha256
+```
+
+发布到 GitHub Releases：
+
+```sh
+gh release create v0.2.0 \
+  dist/CoursePilot-Windows-x64.zip dist/CoursePilot-Windows-x64.zip.sha256 \
+  dist/CoursePilot-Windows-x64.exe dist/CoursePilot-Windows-x64.exe.sha256 \
+  dist/CoursePilot-macOS-arm64.zip dist/CoursePilot-macOS-arm64.zip.sha256 \
+  dist/CoursePilot-macOS-arm64.dmg dist/CoursePilot-macOS-arm64.dmg.sha256 \
+  --title "CoursePilot v0.2.0" --notes "..."`
 
 ## 隐私与安全
 

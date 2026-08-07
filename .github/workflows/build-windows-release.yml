@@ -30,3 +30,5 @@ jobs:
           files: |
             dist/CoursePilot-Windows-x64.zip
             dist/CoursePilot-Windows-x64.zip.sha256
+            dist/CoursePilot-Windows-x64.exe
+            dist/CoursePilot-Windows-x64.exe.sha256

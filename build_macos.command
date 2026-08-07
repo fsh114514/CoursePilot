@@ -39,4 +39,18 @@ rm -rf build dist
 ditto -c -k --sequesterRsrc --keepParent \
     dist/CoursePilot.app dist/CoursePilot-macOS-arm64.zip
 shasum -a 256 dist/CoursePilot-macOS-arm64.zip > dist/CoursePilot-macOS-arm64.zip.sha256
-echo "已生成：dist/CoursePilot-macOS-arm64.zip"
+
+# 免解压版：dmg 磁盘镜像（双击挂载，拖进"应用程序"即可）
+rm -rf dist/dmg-staging
+mkdir -p dist/dmg-staging
+cp -R dist/CoursePilot.app dist/dmg-staging/
+hdiutil create \
+    -volname CoursePilot \
+    -srcfolder dist/dmg-staging \
+    -ov -format UDZO \
+    dist/CoursePilot-macOS-arm64.dmg
+rm -rf dist/dmg-staging
+shasum -a 256 dist/CoursePilot-macOS-arm64.dmg > dist/CoursePilot-macOS-arm64.dmg.sha256
+
+echo "已生成："
+ls -lh dist/CoursePilot-macOS-arm64.*

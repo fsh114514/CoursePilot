@@ -62,6 +62,8 @@ class MainWindow(QMainWindow):
         self.status.setMinimumHeight(38)
         self.screen_permission = QLabel()
         self.control_permission = QLabel()
+        self.ocr_engine = QLabel()
+        self.ocr_engine.setWordWrap(True)
         self.preview = QLabel("选择窗口后显示预览")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumHeight(180)
@@ -122,6 +124,7 @@ class MainWindow(QMainWindow):
         permission_layout = QVBoxLayout(permission_box)
         permission_layout.addWidget(self.screen_permission)
         permission_layout.addWidget(self.control_permission)
+        permission_layout.addWidget(self.ocr_engine)
         permission_layout.addWidget(QLabel("Windows 通常不需要额外权限；macOS 请在系统设置中允许屏幕录制和辅助功能权限。"))
         layout.addWidget(permission_box)
 
@@ -173,8 +176,16 @@ class MainWindow(QMainWindow):
         screen, control = self.adapter.permissions()
         self.screen_permission.setText(("✓ " if screen else "⚠ ") + ("屏幕录制权限已允许" if screen else "需要屏幕录制权限"))
         self.control_permission.setText(("✓ " if control else "⚠ ") + ("辅助功能权限已允许" if control else "需要辅助功能权限"))
+        self.refresh_ocr_status()
         running = self.start_button.text() == "停止监控"
-        self.start_button.setEnabled(running or (bool(self.window_picker.currentData()) and screen and control))
+        self.start_button.setEnabled(running or (bool(self.window_picker.currentData()) and screen and control and self.controller.ocr_ready))
+
+    def refresh_ocr_status(self) -> None:
+        self.ocr_engine.setText(self.controller.ocr_status)
+        if not self.controller.ocr_ready and sys.platform == "win32":
+            self.ocr_engine.setStyleSheet("color: #e6a23c;")
+        else:
+            self.ocr_engine.setStyleSheet("")
 
     def selection_changed(self, index: int) -> None:
         self.refresh_permissions()

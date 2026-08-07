@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coursepilot"
-version = "0.1.0"
+version = "0.1.2"
 description = "Local video playback interruption assistant for macOS and Windows"
 requires-python = ">=3.11"
 dependencies = [
@@ -23,6 +23,7 @@ macos = [
 ]
 windows = [
   "pywin32>=306; sys_platform == 'win32'",
+  "winsdk>=1.0.0b10; sys_platform == 'win32' and python_version < '3.13'",
 ]
 
 [project.scripts]
