@@ -10,7 +10,7 @@ CoursePilot 是一个面向 macOS 和 Windows 的本地屏幕识别工具。它�
 
 它不依赖油猴脚本、浏览器插件或特定网站适配器，屏幕内容只在本机处理，适合重复出现观看确认弹窗的课程播放场景。
 
-> 当前状态：macOS Apple Silicon 版本已完成本机验证；Windows 测试适配器已接入，等待实体 Windows 电脑验证。
+> 当前状态：Windows 版已在 Windows 11 虚拟机完整验证（窗口选择、预览、OCR 识别、自动点击均可用）；macOS 打包版因屏幕录制权限需 Apple 开发者证书，暂以源码运行方式提供。
 
 ## 功能特点
 
@@ -28,13 +28,9 @@ CoursePilot 是一个面向 macOS 和 Windows 的本地屏幕识别工具。它�
 
 ## macOS 使用教程
 
-### 1. 下载并启动（普通用户）
+> **注意**：macOS 打包版（.app/dmg）的屏幕录制权限依赖 Apple 开发者证书。未签名打包版权限可能不稳定。**推荐用源码运行方式**（终端有权限，稳定可用）。
 
-在 GitHub Releases 下载 `CoursePilot-macOS-arm64.zip`，解压后将 `CoursePilot.app` 拖到“应用程序”文件夹，再双击启动。
-
-这是 Apple Silicon 版本。如果 macOS 提示无法验证开发者，请在 Finder 中右键点击 `CoursePilot.app`，选择“打开”，再确认打开。macOS 版用系统 CoreGraphics 捕捉窗口，无需屏幕录制权限；自动点击需要辅助功能权限。
-
-### 2. 从源码运行（开发者）
+### 1. 从源码运行（推荐，稳定）
 
 ```sh
 git clone https://github.com/fsh114514/CoursePilot.git
@@ -46,10 +42,14 @@ python3 -m venv .venv
 
 也可以直接双击 `run_macos.command` 启动。
 
+### 2. 打包版（可能需要手动授权）
+
+在 GitHub Releases 下载 `CoursePilot-macOS-arm64.zip` 解压运行。若屏幕录制权限不稳定（重启后失效），请到“系统设置 → 隐私与安全性 → 屏幕录制”重新勾选，并完全退出后重启应用。
+
 ### 3. 第一次使用
 
-1. macOS 版用系统 CoreGraphics 捕捉窗口，**不需要屏幕录制权限**。
-2. 若“辅助功能”权限未开启（自动点击需要），到“系统设置 → 隐私与安全性 → 辅助功能”中允许 CoursePilot 并重启。
+1. 启动 CoursePilot，若提示权限，点“请求屏幕录制和辅助功能权限”，允许 CoursePilot。
+2. 授权后**完全退出并重启**应用（macOS 权限在启动时生效）。
 3. 把课程窗口放到当前台前调度组，并点击“刷新窗口”。
 4. 从列表选择课程窗口，确认预览正确。
 5. 点击“开始监控”。
@@ -137,8 +137,8 @@ gh release create v0.2.0 \
 ## 开发状态
 
 ```text
-macOS：可用原型，已完成本地测试
-Windows：测试版，待实体 Windows 电脑验证
+Windows：已完整验证（窗口选择、预览、OCR、自动点击均可用）—— 主推平台
+macOS：源码运行可用；打包版需 Apple 开发者证书才能稳定使用屏幕录制权限
 Linux：暂不计划
 ```
 
