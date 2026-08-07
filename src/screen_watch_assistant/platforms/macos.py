@@ -263,3 +263,19 @@ class MacOSAdapter(PlatformAdapter):
 
         control = bool(AXIsProcessTrusted())
         return screen, control
+
+    def request_screen_permission(self) -> None:
+        """主动请求屏幕录制权限（macOS 10.15+）。
+
+        调用 CGRequestScreenCaptureAccess() 会弹出系统授权框，
+        用户无需手动去"系统设置"里找。注意：
+        - 只能在 GUI 会话中调用才会弹框
+        - 只能触发一次，之后需要用户去系统设置更改
+        - 打包的 .app 是独立二进制，需要单独授权（不是 Python/终端）
+        """
+        request = getattr(self.quartz, "CGRequestScreenCaptureAccess", None)
+        if request is not None:
+            try:
+                request()
+            except Exception:
+                pass

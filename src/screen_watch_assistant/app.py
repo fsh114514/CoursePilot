@@ -125,7 +125,16 @@ class MainWindow(QMainWindow):
         permission_layout.addWidget(self.screen_permission)
         permission_layout.addWidget(self.control_permission)
         permission_layout.addWidget(self.ocr_engine)
-        permission_layout.addWidget(QLabel("Windows 通常不需要额外权限；macOS 请在系统设置中允许屏幕录制和辅助功能权限。"))
+        if sys.platform == "darwin":
+            self.request_perm_button = QPushButton("请求屏幕录制权限")
+            self.request_perm_button.clicked.connect(self.request_permissions)
+            permission_layout.addWidget(self.request_perm_button)
+            permission_layout.addWidget(QLabel(
+                "macOS 请在系统设置 → 隐私与安全性 → 屏幕录制 中允许 CoursePilot（注意：不是允许 Python 或终端）。"
+                "授权后需重启本应用才能生效。"
+            ))
+        else:
+            permission_layout.addWidget(QLabel("Windows 通常不需要额外权限。"))
         layout.addWidget(permission_box)
 
         layout.addWidget(self.start_button)
@@ -172,10 +181,20 @@ class MainWindow(QMainWindow):
         self.selection_changed(self.window_picker.currentIndex())
         self.add_log(f"刷新窗口列表：{len(windows)} 个")
 
+    def request_permissions(self) -> None:
+        """主动弹出 macOS 屏幕录制授权框。"""
+        if hasattr(self.adapter, "request_screen_permission"):
+            self.adapter.request_screen_permission()
+            self.add_log("已请求屏幕录制权限，请在系统弹窗中允许 CoursePilot，授权后重启应用。")
+
     def refresh_permissions(self) -> None:
         screen, control = self.adapter.permissions()
         self.screen_permission.setText(("✓ " if screen else "⚠ ") + ("屏幕录制权限已允许" if screen else "需要屏幕录制权限"))
         self.control_permission.setText(("✓ " if control else "⚠ ") + ("辅助功能权限已允许" if control else "需要辅助功能权限"))
+        # 权限从无到有时提示重启（macOS TCC 在进程启动时加载权限）
+        if sys.platform == "darwin" and screen and not getattr(self, "_prev_screen", False):
+            self.add_log("检测到屏幕录制权限已允许，请重启本应用以完全生效。")
+        self._prev_screen = screen
         self.refresh_ocr_status()
         running = self.start_button.text() == "停止监控"
         self.start_button.setEnabled(running or (bool(self.window_picker.currentData()) and screen and control and self.controller.ocr_ready))
