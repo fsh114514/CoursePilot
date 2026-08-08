@@ -19,9 +19,15 @@ CoursePilot 是一个**纯本地**运行的网课播放自动化工具：识别�
 - **🎯 只点白名单按钮**：仅处理你配置的"继续观看"类文字，**绝不触碰**提交 / 交卷 / 支付 / 购买 / 删除等操作
 - **🪟 窗口级精确控制**：支持 Chrome、B 站及任意可捕获窗口，你选哪个窗口就只动哪个窗口
 
-> 📸 演示：弹窗出现 → 自动点击 → 视频继续
->
-> ![CoursePilot 演示](assets/coursepilot-demo.gif)
+<div align="center">
+
+### 📸 效果演示
+
+弹窗出现 → 自动点击 → 视频继续
+
+![CoursePilot 演示](https://github.com/fsh114514/CoursePilot/raw/main/assets/coursepilot-demo.gif)
+
+</div>
 
 ## 快速开始
 
