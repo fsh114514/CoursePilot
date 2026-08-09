@@ -1,3 +1,9 @@
+<div align="center">
+
+<img src="assets/coursepilot-icon.png" alt="CoursePilot" width="40" height="40">
+
+</div>
+
 # CoursePilot · 网课播放自动化助手
 
 > 网课看一半，又弹"我还在看"？
